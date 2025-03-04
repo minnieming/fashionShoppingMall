@@ -1,0 +1,561 @@
+name: Deploy CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  # main 브랜치에 머지될 때만 실행
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      module_changed: ${{ steps.get_changed.outputs.changed }}
+    steps:
+      - name: Find change modules
+        uses: Stockopedia/action-get-changed-files@v1
+        id: get_changed
+        with:
+          github-token: ${{ secrets.GIT_TOKEN }}
+          ignore: "**/+(.github)"
+          foldersOnly: true
+          format: csv
+
+      - name: Echo changed files
+        run: echo ${{ steps.get_changed.outputs.changed }}
+
+  deploy-cart:
+    runs-on: ubuntu-latest
+    needs: [ detect-changes ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'cart') || contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-cart-service:clean :module-cart-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-cart-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/cart/*.sh before-deploy/
+          cp module-cart-service/appspec.yml before-deploy/
+          cp module-cart-service/Dockerfile before-deploy/
+          cp module-cart-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r CartService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/CartService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/CartService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-cart-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=CartService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-coupon:
+    runs-on: ubuntu-latest
+    needs: [ deploy-cart ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'coupon')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-coupon-service:clean :module-coupon-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-coupon-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/coupon/*.sh before-deploy/
+          cp module-coupon-service/appspec.yml before-deploy/
+          cp module-coupon-service/Dockerfile before-deploy/
+          cp module-coupon-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r CouponService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/CouponService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/CouponService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-coupon-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=CouponService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-eureka:
+    runs-on: ubuntu-latest
+    needs: [ deploy-coupon ]
+    if: always() && contains(needs.detect-changes.outputs.module_changed, 'eureka')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-eureka-server:clean :module-eureka-server:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-eureka-server/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/eureka/*.sh before-deploy/
+          cp module-eureka-server/appspec.yml before-deploy/
+          cp module-eureka-server/Dockerfile before-deploy/
+          cp module-eureka-server/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r EurekaServer_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/EurekaServer_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/EurekaServer_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-eureka-server \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=EurekaServer_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-gateway:
+    runs-on: ubuntu-latest
+    needs: [ deploy-eureka ]
+    if: always() && contains(needs.detect-changes.outputs.module_changed, 'gateway')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-gateway-service:clean :module-gateway-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-gateway-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/gateway/*.sh before-deploy/
+          cp module-gateway-service/appspec.yml before-deploy/
+          cp module-gateway-service/Dockerfile before-deploy/
+          cp module-gateway-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r GatewayService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/GatewayService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/GatewayService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-gateway-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=GatewayService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-image:
+    runs-on: ubuntu-latest
+    needs: [ deploy-gateway ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'image')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-image-service:clean :module-image-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-image-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "CLOUD_AWS_CREDENTIALS_ACCESSKEY=${{ secrets.AWS_IAM_ACCESSKEY }}" >> before-deploy/.env      
+          echo "CLOUD_AWS_CREDENTIALS_SECRETKEY=${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}" >> before-deploy/.env   
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/image/*.sh before-deploy/
+          cp module-image-service/appspec.yml before-deploy/
+          cp module-image-service/Dockerfile before-deploy/
+          cp module-image-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r ImageService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/ImageService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/ImageService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-image-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=ImageService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-item:
+    runs-on: ubuntu-latest
+    needs: [ deploy-image ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'item')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-item-service:clean :module-item-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-item-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/item/*.sh before-deploy/
+          cp module-item-service/appspec.yml before-deploy/
+          cp module-item-service/Dockerfile before-deploy/
+          cp module-item-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r ItemService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/ItemService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/ItemService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-item-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=ItemService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-order:
+    runs-on: ubuntu-latest
+    needs: [ deploy-item ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'order')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-order-service:clean :module-order-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-order-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "PORTONE_API_KEY=${{ secrets.PORTONE_API_KEY }}" >> before-deploy/.env
+          echo "PORTONE_API_SECRET=${{ secrets.PORTONE_API_SECRET }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/order/*.sh before-deploy/
+          cp module-order-service/appspec.yml before-deploy/
+          cp module-order-service/Dockerfile before-deploy/
+          cp module-order-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r OrderService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/OrderService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/OrderService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-order-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=OrderService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-review:
+    runs-on: ubuntu-latest
+    needs: [ deploy-order ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'review')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-review-service:clean :module-review-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-review-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/review/*.sh before-deploy/
+          cp module-review-service/appspec.yml before-deploy/
+          cp module-review-service/Dockerfile before-deploy/
+          cp module-review-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r ReviewService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/ReviewService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/ReviewService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-review-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=ReviewService_CI-CD.zip}" \
+            --region ap-northeast-2
+
+  deploy-user:
+    runs-on: ubuntu-latest
+    needs: [ deploy-review ]
+    if: always() && (contains(needs.detect-changes.outputs.module_changed, 'user')|| contains(needs.detect-changes.outputs.module_changed, 'common'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_IAM_ACCESSKEY }}
+          aws-secret-access-key: ${{ secrets.AWS_IAM_SECRET_ACCESSKEY }}
+          aws-region: ap-northeast-2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build project with Gradle
+        run: ./gradlew :module-user-service:clean :module-user-service:build
+
+      - name: Check if JAR file exists
+        run: |
+          if [ ! -f module-user-service/build/libs/*.jar ]; then
+            echo "JAR file not found!"
+            exit 1
+          fi
+
+      - name: Add .env file
+        run: |
+          mkdir -p before-deploy
+          echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_USERNAME=${{ secrets.DATASOURCE_USERNAME }}" >> before-deploy/.env
+          echo "SPRING_DATASOURCE_PASSWORD=${{ secrets.DATASOURCE_PASSWORD }}" >> before-deploy/.env
+
+      - name: Prepare deployment package
+        run: |
+          mkdir -p before-deploy
+          cp script/user/*.sh before-deploy/
+          cp module-user-service/appspec.yml before-deploy/
+          cp module-user-service/Dockerfile before-deploy/
+          cp module-user-service/build/libs/*.jar before-deploy/
+          cd before-deploy
+          zip -r UserService_CI-CD.zip ./.
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp before-deploy/UserService_CI-CD.zip s3://my-fashionmall-github-actions-s3-bucket/UserService_CI-CD.zip
+
+      - name: Trigger CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name fashion-mall \
+            --deployment-group-name fashion-mall-module-user-service \
+            --revision "revisionType=S3,s3Location={bucket=my-fashionmall-github-actions-s3-bucket,bundleType=zip,key=UserService_CI-CD.zip}" \
+            --region ap-northeast-2

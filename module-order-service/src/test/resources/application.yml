@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:test
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # 테스트 시마다 DB를 새로 생성하고 삭제
+    show-sql: true           # SQL 쿼리 로깅
+
+portOne:
+  api:
+    key: 5482317358863162
+    secret: 3W0jN8G2t522JGYp2wsWPQO0f4R5L839JWCDMY8DB0bXqFWAkwwkj5Tm0cWVj5HUrCwT3XjKCCX2l59B

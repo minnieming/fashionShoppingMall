@@ -1,0 +1,20 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: module-review-service
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  profiles:
+    active: local
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://eureka-green:8761/eureka/

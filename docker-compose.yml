@@ -1,0 +1,250 @@
+services:
+  web:
+    image: nginx
+    ports:
+      - 80:80
+    volumes:
+      - /etc/nginx/:/etc/nginx/
+
+  #cart
+  cart_green:
+    build:
+      context: ./module-cart-service
+    image: cart
+    container_name: cart_green
+    ports:
+      - 8080:8080
+    volumes:
+      - ./module-cart-service:/fashion-mall/module-cart-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  cart_blue:
+    build:
+      context: ./module-cart-service
+    image: cart
+    container_name: cart_blue
+    ports:
+      - 8087:8087
+    volumes:
+      - ./module-cart-service:/fashion-mall/module-cart-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #coupon
+  coupon_green:
+    build:
+      context: ./module-coupon-service
+    image: coupon
+    container_name: coupon_green
+    ports:
+      - 8081:8081
+    volumes:
+      - ./module-coupon-service:/fashion-mall/module-coupon-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  coupon_blue:
+    build:
+      context: ./module-coupon-service
+    image: coupon
+    container_name: coupon_blue
+    ports:
+      - 8088:8088
+    volumes:
+      - ./module-coupon-service:/fashion-mall/module-coupon-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #item
+  item_green:
+    build:
+      context: ./module-item-service
+    image: item
+    container_name: item_green
+    ports:
+      - 8082:8082
+    volumes:
+      - ./module-item-service:/fashion-mall/module-item-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  item_blue:
+    build:
+      context: ./module-item-service
+    image: item
+    container_name: item_blue
+    ports:
+      - 8089:8089
+    volumes:
+      - ./module-item-service:/fashion-mall/module-item-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #order
+  order_green:
+    build:
+      context: ./module-order-service
+    image: order
+    container_name: order_green
+    ports:
+      - 8083:8083
+    volumes:
+      - ./module-order-service:/fashion-mall/module-order-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  order_blue:
+    build:
+      context: ./module-order-service
+    image: order
+    container_name: order_blue
+    ports:
+      - 8090:8090
+    volumes:
+      - ./module-order-service:/fashion-mall/module-order-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #review
+  review_green:
+    build:
+      context: ./module-review-service
+    image: review
+    container_name: review_green
+    ports:
+      - 8084:8084
+    volumes:
+      - ./module-review-service:/fashion-mall/module-review-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  review_blue:
+    build:
+      context: ./module-review-service
+    image: review
+    container_name: review_blue
+    ports:
+      - 8091:8091
+    volumes:
+      - ./module-review-service:/fashion-mall/module-review-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #user
+  user_green:
+    build:
+      context: ./module-user-service
+    image: user
+    container_name: user_green
+    ports:
+      - 8085:8085
+    volumes:
+      - ./module-user-service:/fashion-mall/module-user-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  user_blue:
+    build:
+      context: ./module-user-service
+    image: user
+    container_name: user_blue
+    ports:
+      - 8092:8092
+    volumes:
+      - ./module-user-service:/fashion-mall/module-user-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  #image
+  image_green:
+    build:
+      context: ./module-image-service
+    image: image
+    container_name: image_green
+    ports:
+      - 8086:8086
+    volumes:
+      - ./module-image-service:/fashion-mall/module-image-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  image_blue:
+    build:
+      context: ./module-image-service
+    image: image
+    container_name: image_blue
+    ports:
+      - 8093:8093
+    volumes:
+      - ./module-image-service:/fashion-mall/module-image-service
+    depends_on:
+      - eureka-green
+      - gateway-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=blue
+
+  eureka-green:
+    build:
+      context: ./module-eureka-server
+    image: eureka
+    container_name: eureka-green
+    ports:
+      - 8761:8761
+    volumes:
+      - ./module-eureka-server:/fashion-mall/module-eureka-server
+    environment:
+      - SPRING_PROFILES_ACTIVE=green
+
+  gateway-green:
+    build:
+      context: ./module-gateway-service
+    image: gateway
+    container_name: gateway-green
+    ports:
+      - 8000:8000
+    volumes:
+      - ./module-gateway-service:/fashion-mall/module-gateway-service
+    depends_on:
+      - eureka-green
+    environment:
+      - SPRING_PROFILES_ACTIVE=green

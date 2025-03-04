@@ -1,0 +1,77 @@
+spring:
+  profiles:
+    group:
+      "green": "green_port"
+---
+server:
+  port: 8086
+
+spring:
+  config:
+    activate:
+      on-profile: "green_port"
+
+  application:
+    name: module-image-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/
+
+cloud:
+  aws:
+    credentials:
+      accessKey: ${AWS_IAM_ACCESSKEY}
+      secretKey: ${AWS_IAM_SECRET_ACCESSKEY}
+    region:
+      static: ap-northeast-2
+    s3:
+      bucket: s3-bucket-shopdb
+
+---
+
+spring:
+  profiles:
+    group:
+      "blue": "blue_port"
+---
+server:
+  port: 8093
+
+spring:
+  config:
+    activate:
+      on-profile: "blue_port"
+
+  application:
+    name: module-image-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/
+
+cloud:
+  aws:
+    credentials:
+      accessKey: ${AWS_IAM_ACCESSKEY}
+      secretKey: ${AWS_IAM_SECRET_ACCESSKEY}
+    region:
+      static: ap-northeast-2
+    s3:
+      bucket: s3-bucket-shopdb

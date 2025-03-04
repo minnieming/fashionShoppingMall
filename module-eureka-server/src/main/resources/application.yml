@@ -1,0 +1,17 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: module-eureka-server
+  security:
+    user:
+      name: user
+      password: user
+  profiles:
+    active: local
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false

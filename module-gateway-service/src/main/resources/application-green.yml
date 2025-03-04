@@ -1,0 +1,24 @@
+spring:
+  profiles:
+    group:
+      green: "green"
+---
+server:
+  port: 8000
+
+spring:
+  config:
+    activate:
+      on-profile: "green"
+  application:
+    name: module-gateway-service
+  main:
+    web-application-type: reactive
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/

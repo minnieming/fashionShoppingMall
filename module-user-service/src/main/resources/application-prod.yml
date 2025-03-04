@@ -1,0 +1,57 @@
+spring:
+  profiles:
+    group:
+      "green": "green_port"
+---
+server:
+  port: 8085
+
+spring:
+  config:
+    activate:
+      on-profile: "green_port"
+
+  application:
+    name: module-user-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/
+
+---
+
+spring:
+  profiles:
+    group:
+      "blue": "blue_port"
+---
+server:
+  port: 8092
+
+spring:
+  config:
+    activate:
+      on-profile: "blue_port"
+
+  application:
+    name: module-user-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/

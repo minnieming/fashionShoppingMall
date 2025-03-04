@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:test
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # 테스트 시마다 DB를 새로 생성하고 삭제
+    show-sql: true           # SQL 쿼리 로깅

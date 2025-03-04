@@ -1,0 +1,29 @@
+spring:
+  profiles:
+    group:
+      green: "green"
+---
+server:
+  port: 8085
+
+spring:
+  config:
+    activate:
+      on-profile: "green"
+
+  application:
+    name: module-user-service
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url:
+    username:
+    password:
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+    service-url:
+      defaultZone: http://13.125.10.163:8761/eureka/
